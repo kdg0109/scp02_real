@@ -24,6 +24,23 @@ public class Scp02Test
 
 
     @Test
+    public void mockTest() throws Exception
+    {
+        OffCard.InitializeUpdate_C_APDU = "8050000008D1853EB979B8A918";
+        OffCard.ExternalAuthenticate_C_APDU = "8482000010";
+
+        CApduService capduService = PowerMockito.mock(CApduService.class);// 가짜 만들기
+        when(capduService.sendApdu("8050000008D1853EB979B8A918")).thenReturn("0000517786E8AA51042D010200018F3D497C0D1257C74F30E21BD3AC9000");
+        when(capduService.sendApdu("84820000108BD933FA46AA5EA6FF2E8FBA2D6D2E4E")).thenReturn("9000");
+        Scp02.setCapduService(capduService);
+        Scp02.getMutualAuthentication("D1853EB979B8A918");
+    }
+
+
+
+
+
+    @Test
     public void testReadPhoto() throws Exception
     {
         // Select APDU 명령
@@ -33,15 +50,16 @@ public class Scp02Test
 
         String rApduString = CApduServiceImpl.sendApdu(APDU);
 
+        logger.info("RAPDU : " + rApduString);
         if ( ("9000").equals(rApduString.substring(rApduString.length() - 4, rApduString.length())) )
         {
             logger.info("RAPDU : " + rApduString);
 
-            OffCard.InitializeUpdate_C_APDU = "8050000008EC78EEA2438008A6";
+            OffCard.InitializeUpdate_C_APDU = "8050000008D1853EB979B8A918";
             OffCard.ExternalAuthenticate_C_APDU = "8482000010";
 
             Scp02.setCapduService(CApduServiceImpl);
-            Scp02.getMutualAuthentication("EC78EEA2438008A6");
+            Scp02.getMutualAuthentication("D1853EB979B8A918");
 
         }
         else

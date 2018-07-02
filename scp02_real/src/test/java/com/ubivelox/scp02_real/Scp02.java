@@ -22,6 +22,12 @@ public class Scp02
 
     static CApduService         capduService;
 
+    enum DerivationType
+    {
+        VISA2,
+        EMV_CPS;
+    }
+
 
 
 
@@ -53,11 +59,14 @@ public class Scp02
 
     public static class Key
     {
-        public static String ENCKey = "404043434545464649494A4A4C4C4F4F";
-        public static String MACKey = "404043434545464649494A4A4C4C4F4F";
-        public static String DEKKey = "404043434545464649494A4A4C4C4F4F";
-        // public static final String MACKey = "505053535555565659595A5A5C5C5F5F";
-        // public static final String DEKKey = "606063636565666669696A6A6C6C6F6F";
+        // 마스터 키임
+        public static String ENC_MK = "404043434545464649494A4A4C4C4F4F";
+        public static String MAC_MK = "505053535555565659595A5A5C5C5F5F";
+        public static String DEK_MK = "606063636565666669696A6A6C6C6F6F";
+
+        public static String ENCKey = "";
+        public static String MACKey = "";
+        public static String DEKKey = "";
     }
 
 
@@ -66,7 +75,7 @@ public class Scp02
 
     public static void getMutualAuthentication(final String hostChallenge) throws GaiaException, UbiveloxException
     {
-        logger.info(capduService.sendApdu(externalAuthenticate(capduService.sendApdu(initializeUpdate(hostChallenge)), 0)));
+        logger.info(capduService.sendApdu(externalAuthenticate(capduService.sendApdu(initializeUpdate(hostChallenge)), DerivationType.VISA2)));
 
     }
 
@@ -128,12 +137,21 @@ public class Scp02
         return S_ENC;
     }
 
+    // Key diversification data
+    // ISD AID/CPLC의 IC 제조 날짜/CPLC의 IC 일련번호/CPLC의 IC 배치 식별자
+    // 0000 /7006 /0A7B67E4 /36E4
+    // 0102 0002 796F1C98410F B21CC4D0843C30B8 9000
+
+    // Key Diversification Data = 0A7B67E436E4 F001 0A7B67E436E4 0F01
+    // Key Diversification Data = 0A7B67E436E4 F001 0A7B67E436E4 0F01
+    // Key Diversification Data = 0A7B67E436E4 F001 0A7B67E436E4 0F01
+
 
 
 
 
     // off-Card가 Card로 보내는 ExternalAuthenticate APDU
-    public static String externalAuthenticate(final String InitializeUpdateRAPDUORG, final int derivationType) throws UbiveloxException, GaiaException
+    public static String externalAuthenticate(final String InitializeUpdateRAPDUORG, final DerivationType derivationType) throws UbiveloxException, GaiaException
     {
         GaiaUtils.checkHexaString(InitializeUpdateRAPDUORG);
 
@@ -153,11 +171,34 @@ public class Scp02
 
         // host cryptogram과 MAC 생성
 
+        String diversificationData = InitializeUpdateRAPDU.substring(8, 20);
+
         String sequenceCounter = InitializeUpdateRAPDU.substring(24, 28);
 
         String hostChallenge = OffCard.InitializeUpdate_C_APDU.substring(10, OffCard.InitializeUpdate_C_APDU.length());
 
         String cardChallenge = InitializeUpdateRAPDU.substring(28, 40);
+
+        logger.info("Diversification_Data : " + diversificationData + "F001" + diversificationData + "0F01");
+
+        Key.ENCKey = Ddes.encrypt(diversificationData + "F001" + diversificationData + "0F01",
+                                  "DESede",
+                                  "DESede/ECB/NoPadding",
+                                  GaiaUtils.convertHexaStringToByteArray(Key.ENC_MK + Key.ENC_MK.substring(0, Key.ENC_MK.length() / 2)));
+
+        Key.MACKey = Ddes.encrypt(diversificationData + "F002" + diversificationData + "0F02",
+                                  "DESede",
+                                  "DESede/ECB/NoPadding",
+                                  GaiaUtils.convertHexaStringToByteArray(Key.MAC_MK + Key.MAC_MK.substring(0, Key.MAC_MK.length() / 2)));
+
+        Key.DEKKey = Ddes.encrypt(diversificationData + "F003" + diversificationData + "0F03",
+                                  "DESede",
+                                  "DESede/ECB/NoPadding",
+                                  GaiaUtils.convertHexaStringToByteArray(Key.DEK_MK + Key.DEK_MK.substring(0, Key.DEK_MK.length() / 2)));
+
+        logger.info("enc_key : " + Key.ENCKey);
+        logger.info("mac_key : " + Key.MACKey);
+        logger.info("dek_key : " + Key.DEKKey);
 
         String sessionkey = getSessionKeyENC("S-ENC", sequenceCounter);
         byte[] sessionkeyByteArray = GaiaUtils.convertHexaStringToByteArray(sessionkey + sessionkey.substring(0, sessionkey.length() / 2));
@@ -184,6 +225,7 @@ public class Scp02
         byte[] result = Ddes.retailMac(sessionkeyByteArray, GaiaUtils.convertHexaStringToByteArray(dataTmp));
 
         logger.info("retailMac : " + GaiaUtils.convertByteArrayToHexaString(result));
+
         return externalAuthenticateCAPDU + GaiaUtils.convertByteArrayToHexaString(result);
     }
 
@@ -191,28 +233,19 @@ public class Scp02
 
 
 
-    private static void setDerivationType(final int derivationType)
+    private static void setDerivationType(final DerivationType derivationType)
     {
-        switch ( derivationType )
+        if ( derivationType == DerivationType.VISA2 )
         {
-            case 0:
-                Key.ENCKey = "404043434545464649494A4A4C4C4F4F";
-                Key.MACKey = "404043434545464649494A4A4C4C4F4F";
-                Key.DEKKey = "404043434545464649494A4A4C4C4F4F";
-                break;
-            case 1:
-                Key.ENCKey = "404043434545464649494A4A4C4C4F4F";
-                Key.MACKey = "404043434545464649494A4A4C4C4F4F";
-                Key.DEKKey = "404043434545464649494A4A4C4C4F4F";
-                break;
-            case 2:
-                Key.ENCKey = "404043434545464649494A4A4C4C4F4F";
-                Key.MACKey = "404043434545464649494A4A4C4C4F4F";
-                Key.DEKKey = "404043434545464649494A4A4C4C4F4F";
-                break;
-
-            default:
-                break;
+            Key.ENC_MK = "404043434545464649494A4A4C4C4F4F";
+            Key.MAC_MK = "505053535555565659595A5A5C5C5F5F";
+            Key.DEK_MK = "606063636565666669696A6A6C6C6F6F";
+        }
+        else if ( derivationType == DerivationType.EMV_CPS )
+        {
+            Key.ENC_MK = "404043434545464649494A4A4C4C4F4F";
+            Key.MAC_MK = "404043434545464649494A4A4C4C4F4F";
+            Key.DEK_MK = "404043434545464649494A4A4C4C4F4F";
         }
 
     }

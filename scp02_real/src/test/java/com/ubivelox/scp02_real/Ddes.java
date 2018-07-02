@@ -16,6 +16,7 @@ import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.DESKeySpec;
+import javax.crypto.spec.DESedeKeySpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -64,6 +65,29 @@ public class Ddes
                     throw new UbiveloxException("cipher 에러");
                 }
 
+            }
+            else if ( transformation.contains("ECB") )
+            {
+
+                SecretKeyFactory keyFactory = null;
+
+                try
+                {
+                    keyFactory = SecretKeyFactory.getInstance(encryptType);
+
+                    DESedeKeySpec desSedeKeySpec = new DESedeKeySpec(baseKey);
+
+                    SecretKey key = keyFactory.generateSecret(desSedeKeySpec);
+
+                    cipher = Cipher.getInstance(transformation);
+                    cipher.init(opmode, key);
+
+                }
+                catch ( Exception e )
+                {
+                    e.printStackTrace();
+                    // throw new UbiveloxException("cipher 에러");
+                }
             }
 
             // DES 8비트 키
@@ -172,7 +196,8 @@ public class Ddes
         }
         catch ( Exception e )
         {
-            throw new UbiveloxException("암호화 에러");
+            e.printStackTrace();
+            // throw new UbiveloxException("암호화 에러");
         }
 
         return GaiaUtils.convertByteArrayToHexaString(outputBytes);
